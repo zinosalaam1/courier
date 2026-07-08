@@ -1,4 +1,4 @@
-import { useMemo, useRef, type RefObject } from "react";
+import { memo, useMemo, useRef, type RefObject } from "react";
 import * as THREE from "three";
 import { Canvas, useThree, useFrame } from "@react-three/fiber";
 import { City } from "./City";
@@ -18,15 +18,30 @@ interface SceneProps {
 
 /** Renders once per mission (key={missionId} from the parent) so world refs and
  *  player physics state are always fresh for a new contract. */
-export function Scene({ vehicle, theme }: SceneProps) {
+export const Scene = memo(function Scene({ vehicle, theme }: SceneProps) {
   const world = useMemo(() => createWorldRefs(), []);
   const hazardCarsRef = useRef<HazardCarsHandle>(null);
   const gadgetEffectsRef = useRef<GadgetEffectsHandle>(null);
 
+  // IMPORTANT: this object must not be a fresh literal on every render. R3F's
+  // <Canvas camera={...}> prop is watched for changes and re-applied whenever
+  // it changes reference - a new {position:[...]} literal every render means
+  // R3F keeps resetting the camera back to this spawn position, fighting the
+  // chase-camera logic in Player.tsx and making it look like the camera never
+  // follows the player at all (it was being reset ~60x/sec before you'd see
+  // it move). Memoizing this, plus wrapping the component itself in
+  // React.memo below, fixes both the direct cause and the underlying churn
+  // (mission-meter updates in the store re-rendering PlayPage -> Scene every
+  // frame even though vehicle/theme never actually change mid-mission).
+  const cameraConfig = useMemo(
+    () => ({ fov: 58, near: 0.1, far: 900, position: [0, 4.5, -68] as [number, number, number] }),
+    []
+  );
+
   return (
     <Canvas
       shadows
-      camera={{ fov: 58, near: 0.1, far: 900, position: [0, 4.5, -68] }}
+      camera={cameraConfig}
       gl={{ antialias: true, powerPreference: "high-performance" }}
       onCreated={({ gl }) => {
         gl.toneMapping = THREE.ACESFilmicToneMapping;
@@ -43,7 +58,7 @@ export function Scene({ vehicle, theme }: SceneProps) {
       />
     </Canvas>
   );
-}
+});
 
 function SceneContents({
   world, vehicle, theme, hazardCarsRef, gadgetEffectsRef,

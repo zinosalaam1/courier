@@ -59,8 +59,12 @@ function saveLocalLeaderboard(rows: LeaderboardRow[]) {
 class AuthService {
   private currentProfile: Profile | null = null;
   private currentEmail: string | null = null;
+  private currentAccessToken: string | null = null;
 
   getProfile() { return this.currentProfile; }
+  /** Real Supabase JWT when configured; null in local demo mode (nothing to
+   *  verify server-side, so multiplayer joins as a guest instead). */
+  getAccessToken() { return this.currentAccessToken; }
 
   async signUp(callsign: string, email: string, password: string): Promise<Profile> {
     if (!SUPABASE_CONFIGURED || !supabase) {
@@ -73,6 +77,7 @@ class AuthService {
     const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { callsign } } });
     if (error) throw new Error(error.message);
     if (!data.session) throw new Error("Check your email to confirm your account, then sign in.");
+    this.currentAccessToken = data.session.access_token;
     await supabase.from("profiles").upsert({ id: data.user!.id, callsign, credits: 0, reputation: 0, deliveries: 0, unlocked: ["bicycle"] }, { onConflict: "id", ignoreDuplicates: true });
     return this.loadRemoteProfile(data.user!.id);
   }
@@ -83,11 +88,13 @@ class AuthService {
       const rec = store[email];
       if (!rec || rec.password !== password) throw new Error("Invalid email or password (local mode).");
       this.currentEmail = email;
+      this.currentAccessToken = null; // no real JWT in local mode - multiplayer server will treat this as a guest
       this.currentProfile = { id: email, callsign: rec.callsign, credits: rec.credits, reputation: rec.reputation, deliveries: rec.deliveries, best_time: rec.best_time, unlocked: rec.unlocked };
       return this.currentProfile;
     }
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw new Error(error.message);
+    this.currentAccessToken = data.session.access_token;
     return this.loadRemoteProfile(data.user.id);
   }
 
@@ -139,6 +146,7 @@ class AuthService {
   signOut() {
     this.currentProfile = null;
     this.currentEmail = null;
+    this.currentAccessToken = null;
     if (supabase) supabase.auth.signOut();
   }
 

@@ -49,6 +49,12 @@ export function MainMenu() {
           >
             Community Records
           </button>
+          <button
+            className="border border-[#ff3b3b40] px-5 py-3 font-['Chakra_Petch'] text-xs font-bold uppercase tracking-widest text-[#ff3b3b] hover:opacity-80"
+            onClick={() => setScreen("chaos")}
+          >
+            20-Player Chaos Mode
+          </button>
           {profile && (
             <button
               className="border border-[#ff3b3b] px-5 py-3 font-['Chakra_Petch'] text-xs font-bold uppercase tracking-widest text-[#ff3b3b] hover:opacity-80"

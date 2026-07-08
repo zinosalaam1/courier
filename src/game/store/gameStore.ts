@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { PACKAGES, VEHICLES, WEEKLY, REALITY_EVENTS, type PackageDef, type VehicleDef, type WeeklyThemeDef, type RealityEventDef } from "../data/gameData";
 import { Auth } from "../backend/backend";
 
-export type GameScreen = "menu" | "auth" | "contract" | "mission" | "end" | "leaderboard";
+export type GameScreen = "menu" | "auth" | "contract" | "mission" | "end" | "leaderboard" | "chaos";
 
 interface ToastItem { id: number; text: string; }
 

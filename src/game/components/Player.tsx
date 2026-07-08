@@ -232,7 +232,9 @@ export function Player({ world, vehicle, gadgetEffectsRef, hazardCarsRef }: Play
       const elapsed = (performance.now() - m.startedAt) / 1000;
       if (elapsed >= rules.timeLimit) { endMission(false, "Time-locked contract expired."); return; }
     }
-    updateMissionMeters({ lastImpactSpeed: lastImpactSpeed.current });
+    if (m.lastImpactSpeed !== lastImpactSpeed.current) {
+      updateMissionMeters({ lastImpactSpeed: lastImpactSpeed.current });
+    }
 
     if (pos.current.distanceTo(world.destinationPosition) < 3.2) {
       endMission(true, "Package delivered intact. Courier Zero logs the run.");

@@ -7,6 +7,7 @@ import { ContractBoard } from "../game/ui/ContractBoard";
 import { AuthPanel } from "../game/ui/AuthPanel";
 import { LeaderboardPanel } from "../game/ui/LeaderboardPanel";
 import { EndScreen } from "../game/ui/EndScreen";
+import { ChaosLobby } from "../game/multiplayer/ChaosLobby";
 import { useGameStore } from "../game/store/gameStore";
 import { Presence } from "../game/backend/backend";
 
@@ -44,6 +45,7 @@ export default function PlayPage() {
       {screen === "auth" && <AuthPanel />}
       {screen === "leaderboard" && <LeaderboardPanel />}
       {screen === "end" && <EndScreen />}
+      {screen === "chaos" && <ChaosLobby />}
     </div>
   );
 }
