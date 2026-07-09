@@ -1,6 +1,16 @@
 /**
  * Deterministic city layout generator.
  *
+ * KNOWN GAP: buildings generated here don't currently avoid the fixed road
+ * corridors defined in the client's src/game/components/roadLayout.ts (that
+ * file is solo/multiplayer-client-only - roads are purely visual, not part
+ * of collision or the server-authoritative simulation, so this file was
+ * intentionally kept free of that dependency). Solo mode's City.tsx applies
+ * its own road-avoidance nudge on top of its independent building placement;
+ * Chaos Mode's buildings, generated here, may occasionally overlap a road
+ * visually. Fix: port the same avoidance check into this function using the
+ * same fixed road positions, applied identically in both copies of this file.
+ *
  * The solo-mode client (src/game/components/City.tsx) uses Math.random() to
  * scatter buildings - fine for a single player where nobody needs to agree on
  * geometry. Multiplayer breaks that assumption: every client AND the

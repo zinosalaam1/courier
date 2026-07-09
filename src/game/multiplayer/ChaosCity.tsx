@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import * as THREE from "three";
 import { generateCityLayout, type CityLayout } from "./cityLayout";
 import { makeFacadeTexture } from "../components/textures";
+import { Roads } from "../components/Roads";
 
 export function ChaosCity({ seed }: { seed: number }) {
   const layout: CityLayout = useMemo(() => generateCityLayout(seed), [seed]);
@@ -11,9 +12,9 @@ export function ChaosCity({ seed }: { seed: number }) {
     <group>
       <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[layout.citySize, layout.citySize, 20, 20]} />
-        <meshStandardMaterial color="#0d1117" roughness={0.55} metalness={0.35} />
+        <meshStandardMaterial color="#171512" roughness={0.9} metalness={0.05} />
       </mesh>
-      <gridHelper args={[layout.citySize, 16, 0xc8f135, 0x1a222c]} position={[0, 0.01, 0]} />
+      <Roads />
 
       {layout.buildings.map((b, i) => (
         <mesh

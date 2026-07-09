@@ -4,8 +4,24 @@ import { useFrame } from "@react-three/fiber";
 import type { WeeklyThemeDef } from "../data/gameData";
 import type { WorldRefs } from "./worldRefs";
 import { makeFacadeTexture, makeSignTexture } from "./textures";
+import { Roads } from "./Roads";
+import { ROAD_SEGMENTS } from "./roadLayout";
 
 const SIGN_WORDS = ["COURIER", "ZERO", "DELIVER", "NO STOPS", "TOUR ARCADE"];
+
+/** True if (x,z) falls inside any road's corridor (plus a building setback),
+ *  so procedural building placement can avoid dropping towers in the street. */
+function isOnRoad(x: number, z: number, setback = 3): boolean {
+  for (const road of ROAD_SEGMENTS) {
+    const halfW = road.width / 2 + setback;
+    if (road.axis === "ns") {
+      if (Math.abs(x - road.x) < halfW && Math.abs(z - road.z) < road.length / 2) return true;
+    } else {
+      if (Math.abs(z - road.z) < halfW && Math.abs(x - road.x) < road.length / 2) return true;
+    }
+  }
+  return false;
+}
 
 interface CityProps {
   world: WorldRefs;
@@ -36,13 +52,23 @@ export function City({ world, theme }: CityProps) {
   const buildings: BuildingSpec[] = useMemo(() => {
     const specs: BuildingSpec[] = [];
     for (let i = 0; i < 30; i++) {
-      const angle = (i / 30) * Math.PI * 2;
-      const radius = 28 + (i % 3) * 18;
+      let angle = (i / 30) * Math.PI * 2;
+      let radius = 28 + (i % 3) * 18;
+      let x = Math.cos(angle) * radius, z = Math.sin(angle) * radius;
+
+      // Nudge away from road corridors instead of planting a tower in the street.
+      let attempts = 0;
+      while (isOnRoad(x, z) && attempts < 8) {
+        radius += 6;
+        x = Math.cos(angle) * radius; z = Math.sin(angle) * radius;
+        attempts++;
+      }
+
       const w = 6 + Math.random() * 6, d = 6 + Math.random() * 6, h = 10 + Math.random() * 30;
       const shapeRoll = Math.random();
       const shape: BuildingSpec["shape"] = shapeRoll < 0.55 ? "box" : shapeRoll < 0.8 ? "cylinder" : "cone";
       specs.push({
-        position: [Math.cos(angle) * radius, h / 2, Math.sin(angle) * radius],
+        position: [x, h / 2, z],
         rotationY: Math.random() * Math.PI,
         size: [w, h, d],
         shape,
@@ -72,9 +98,9 @@ export function City({ world, theme }: CityProps) {
       {/* Ground */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[world.citySize, world.citySize, 20, 20]} />
-        <meshStandardMaterial color="#0d1117" roughness={0.55} metalness={0.35} />
+        <meshStandardMaterial color="#171512" roughness={0.9} metalness={0.05} />
       </mesh>
-      <gridHelper args={[world.citySize, 16, 0xc8f135, 0x1a222c]} position={[0, 0.01, 0]} />
+      <Roads />
 
       {/* Buildings */}
       {buildings.map((b, i) => (

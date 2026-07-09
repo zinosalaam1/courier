@@ -38,6 +38,29 @@ export function makeSignTexture(text: string, color: string): THREE.CanvasTextur
   return tex;
 }
 
+export function makeRoadTexture(): THREE.CanvasTexture {
+  const c = document.createElement("canvas");
+  c.width = 128; c.height = 128;
+  const ctx = c.getContext("2d")!;
+  ctx.fillStyle = "#15181e";
+  ctx.fillRect(0, 0, 128, 128);
+  // Non-directional asphalt speckle - safe to tile/repeat at any orientation
+  // without needing to reason about texture rotation vs. mesh rotation.
+  // Lane markings are separate, simple axis-aligned box meshes (see Roads.tsx)
+  // rather than baked into this texture, specifically to avoid combining
+  // multiple Euler rotations for road orientation, which is easy to get
+  // subtly wrong and hard to verify without running the app.
+  for (let i = 0; i < 500; i++) {
+    ctx.fillStyle = `rgba(255,255,255,${Math.random() * 0.035})`;
+    ctx.fillRect(Math.random() * 128, Math.random() * 128, 2, 2);
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+
 export function makeSkyTexture(): THREE.CanvasTexture {
   const c = document.createElement("canvas");
   c.width = 2; c.height = 256;

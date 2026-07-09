@@ -178,12 +178,17 @@ export function Player({ world, vehicle, gadgetEffectsRef, hazardCarsRef }: Play
       }
     });
 
-    // Sync visible group + expose position globally for hazard-car collision checks.
+    // Sync visible group + expose position/speed globally (hazard-car collision
+    // checks and the HUD's speed readout both read these without subscribing
+    // to component state, since they need up-to-60fps values React state
+    // updates would be too slow/expensive for).
     if (groupRef.current) {
       groupRef.current.position.set(pos.current.x, pos.current.y + (vehicle.fly ? 1.6 : 0), pos.current.z);
       groupRef.current.rotation.y = yaw.current;
     }
+    const horizSpeed = Math.hypot(vel.current.x, vel.current.z);
     window.__tourArcadePlayerPos = pos.current;
+    window.__tourArcadePlayerSpeed = horizSpeed;
 
     // Camera: third-person chase, with an Upside Down camera roll if active.
     const camOffset = new THREE.Vector3(-Math.sin(yaw.current) * 8, 4.5, -Math.cos(yaw.current) * 8);
@@ -193,7 +198,6 @@ export function Player({ world, vehicle, gadgetEffectsRef, hazardCarsRef }: Play
     camera.lookAt(pos.current.x, pos.current.y + 1.2, pos.current.z);
 
     // Character animation
-    const horizSpeed = Math.hypot(vel.current.x, vel.current.z);
     characterHandle.current?.setAnimState(horizSpeed, onGround.current, justJumped);
 
     // ---- Package mission-rule evaluation ----

@@ -98,5 +98,5 @@ function HazardCarMesh({ spec, world, boundsHalf }: { spec: CarSpec; world: Worl
 }
 
 declare global {
-  interface Window { __tourArcadePlayerPos?: THREE.Vector3; }
+  interface Window { __tourArcadePlayerPos?: THREE.Vector3; __tourArcadePlayerSpeed?: number; }
 }

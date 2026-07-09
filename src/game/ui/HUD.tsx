@@ -1,6 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useGameStore } from "../store/gameStore";
 import { Auth } from "../backend/backend";
+import { GADGETS } from "../data/gameData";
+
+// Must match the fixed defaults in components/worldRefs.ts (createWorldRefs) -
+// these never vary by theme/package, so it's safe to mirror them here rather
+// than plumb the whole WorldRefs object through to the UI layer.
+const CITY_SIZE = 160;
+const DESTINATION = { x: 0, z: 55 };
+const START = { x: 0, z: -60 };
 
 function formatTime(seconds: number) {
   const m = Math.floor(seconds / 60), s = Math.floor(seconds % 60);
@@ -42,7 +50,7 @@ export function HUD() {
         </div>
         <div className="flex gap-2.5">
           {[
-            { v: "0", l: "km/h" },
+            { v: String(Math.round((window.__tourArcadePlayerSpeed ?? 0) * 11)), l: "km/h" },
             { v: formatTime(timerValue), l: "time" },
             { v: profile ? String(profile.credits) : "GUEST", l: "credits" },
           ].map((s, i) => (
@@ -79,9 +87,73 @@ export function HUD() {
         ))}
       </div>
 
+      <Minimap blackedOut={mission.activeEvent?.id === "blackout"} smoked={performance.now() < mission.smokeUntil} />
+      <GadgetHotbar />
+
       <div className="absolute bottom-5 left-1/2 -translate-x-1/2 border border-[#c8f13524] bg-[#07090c99] px-3 py-1.5 text-[10px] uppercase tracking-wider text-[#7a8694]">
         W/S move · A/D turn · SPACE jump · 1-6 gadget
       </div>
+    </div>
+  );
+}
+
+function Minimap({ blackedOut, smoked }: { blackedOut: boolean; smoked: boolean }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    let raf: number;
+    const draw = () => {
+      const canvas = canvasRef.current;
+      const ctx = canvas?.getContext("2d");
+      if (canvas && ctx) {
+        ctx.clearRect(0, 0, 150, 150);
+        if (!blackedOut) {
+          ctx.fillStyle = "#0d1117";
+          ctx.fillRect(0, 0, 150, 150);
+          const scale = 150 / CITY_SIZE;
+          const toMap = (x: number, z: number) => [75 + x * scale, 75 + z * scale];
+
+          // Destination
+          const [dx, dz] = toMap(DESTINATION.x, DESTINATION.z);
+          ctx.fillStyle = "rgba(200,241,53,0.6)";
+          ctx.beginPath(); ctx.arc(dx, dz, 4, 0, Math.PI * 2); ctx.fill();
+
+          // Start
+          const [sx, sz] = toMap(START.x, START.z);
+          ctx.fillStyle = "rgba(122,134,148,0.5)";
+          ctx.beginPath(); ctx.arc(sx, sz, 3, 0, Math.PI * 2); ctx.fill();
+
+          // Player (hidden while smoked, same as the Smoke Device gadget's effect)
+          const playerPos = window.__tourArcadePlayerPos;
+          if (playerPos && !smoked) {
+            const [px, pz] = toMap(playerPos.x, playerPos.z);
+            ctx.fillStyle = "#edf0f4";
+            ctx.beginPath(); ctx.arc(px, pz, 3, 0, Math.PI * 2); ctx.fill();
+          }
+        }
+      }
+      raf = requestAnimationFrame(draw);
+    };
+    raf = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(raf);
+  }, [blackedOut, smoked]);
+
+  return (
+    <div className={`absolute bottom-5 right-5 h-[150px] w-[150px] border border-[#c8f13524] ${blackedOut ? "bg-black" : "bg-[#07090cbf]"}`}>
+      <canvas ref={canvasRef} width={150} height={150} className="h-full w-full" />
+    </div>
+  );
+}
+
+function GadgetHotbar() {
+  return (
+    <div className="absolute bottom-24 left-1/2 flex -translate-x-1/2 gap-1.5">
+      {GADGETS.map((g) => (
+        <div key={g.id} className="flex h-11 w-11 flex-col items-center justify-center border border-[#c8f13524] bg-[#07090ccc] text-center">
+          <div className="text-[11px] font-bold text-[#c8f135]">{g.key}</div>
+          <div className="text-[8px] leading-none text-[#7a8694]">{g.name.split(" ")[0]}</div>
+        </div>
+      ))}
     </div>
   );
 }

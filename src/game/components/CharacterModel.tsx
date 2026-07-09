@@ -35,6 +35,19 @@ class CharacterErrorBoundary extends Component<{ children: ReactNode; fallback: 
   render() { return this.state.failed ? this.props.fallback : this.props.children; }
 }
 
+// RobotExpressive.glb at its native scale is already roughly human-sized -
+// this is exactly how three.js's own official example
+// (webgl_animation_keyframes.html) uses it, with no extra scaling. Tweak
+// these two constants directly if it looks off in your build; don't be
+// tempted to bring back runtime Box3().setFromObject(scene) bounding-box
+// auto-scaling here - that measures the SkinnedMesh before its skeleton's
+// bind pose is established on first load, which is a well-known three.js
+// timing issue that produces a degenerate (near-zero or huge) box and made
+// the whole character effectively invisible (either way too large, with the
+// camera stuck inside it, or scaled down to nothing).
+const CHARACTER_SCALE = 1;
+const CHARACTER_Y_OFFSET = 0;
+
 function GltfCharacter({ onReady }: { onReady: (h: CharacterHandle) => void }) {
   const group = useRef<THREE.Group>(null);
   const gltf = useGLTF(CHARACTER_URL); // suspends until loaded, or throws for the error boundary above
@@ -43,14 +56,8 @@ function GltfCharacter({ onReady }: { onReady: (h: CharacterHandle) => void }) {
   const currentAction = useRef<string | null>(null);
 
   useEffect(() => {
-    // Normalize scale so the model is ~1.8 world units tall with feet at y=0,
-    // regardless of the source model's original unit scale.
-    const box = new THREE.Box3().setFromObject(scene);
-    const height = Math.max(0.1, box.max.y - box.min.y);
-    const scale = 1.8 / height;
-    scene.scale.setScalar(scale);
-    const box2 = new THREE.Box3().setFromObject(scene);
-    scene.position.y -= box2.min.y;
+    scene.scale.setScalar(CHARACTER_SCALE);
+    scene.position.y = CHARACTER_Y_OFFSET;
     scene.traverse((o) => {
       const mesh = o as THREE.Mesh;
       if (mesh.isMesh) { mesh.castShadow = true; mesh.receiveShadow = true; }
