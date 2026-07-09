@@ -3,9 +3,11 @@ import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
 import type { WeeklyThemeDef } from "../data/gameData";
 import type { WorldRefs } from "./worldRefs";
-import { makeFacadeTexture, makeSignTexture } from "./textures";
+import { makeSignTexture } from "./textures";
 import { Roads } from "./Roads";
 import { ROAD_SEGMENTS } from "./roadLayout";
+import { GLTFModel } from "./GLTFModel";
+import { BUILDING_MODELS, FOOTPRINT_HALF_WIDTH_AT_SCALE_1, scaleRangeFor } from "./buildingModels";
 
 const SIGN_WORDS = ["COURIER", "ZERO", "DELIVER", "NO STOPS", "TOUR ARCADE"];
 
@@ -30,12 +32,11 @@ interface CityProps {
 
 interface BuildingSpec {
   position: [number, number, number];
-  rotationY: number;
-  size: [number, number, number];
-  shape: "box" | "cylinder" | "cone";
-  facadeIndex: number;
+  rotationY: number; // always a multiple of 90deg - keeps the (square) footprint axis-aligned so the collision box built from placement data stays accurate at any rotation
+  modelUrl: string;
+  scale: number;
+  approxHeight: number; // for sign placement only, not collision (collision never used height, even pre-GLB)
   isSignHost: boolean;
-  height: number;
 }
 
 export function City({ world, theme }: CityProps) {
@@ -43,7 +44,6 @@ export function City({ world, theme }: CityProps) {
   const extraHazards = theme?.mods.extraHazards ?? false;
   const flooded = theme?.mods.flood ?? false;
 
-  const facadeTextures = useMemo(() => [makeFacadeTexture(1), makeFacadeTexture(2), makeFacadeTexture(3)], []);
   const signTextures = useMemo(
     () => SIGN_WORDS.map((w, i) => makeSignTexture(w, i % 2 === 0 ? "#c8f135" : "#ff3b3b")),
     []
@@ -52,11 +52,10 @@ export function City({ world, theme }: CityProps) {
   const buildings: BuildingSpec[] = useMemo(() => {
     const specs: BuildingSpec[] = [];
     for (let i = 0; i < 30; i++) {
-      let angle = (i / 30) * Math.PI * 2;
+      const angle = (i / 30) * Math.PI * 2;
       let radius = 28 + (i % 3) * 18;
       let x = Math.cos(angle) * radius, z = Math.sin(angle) * radius;
 
-      // Nudge away from road corridors instead of planting a tower in the street.
       let attempts = 0;
       while (isOnRoad(x, z) && attempts < 8) {
         radius += 6;
@@ -64,29 +63,39 @@ export function City({ world, theme }: CityProps) {
         attempts++;
       }
 
-      const w = 6 + Math.random() * 6, d = 6 + Math.random() * 6, h = 10 + Math.random() * 30;
-      const shapeRoll = Math.random();
-      const shape: BuildingSpec["shape"] = shapeRoll < 0.55 ? "box" : shapeRoll < 0.8 ? "cylinder" : "cone";
+      const modelDef = BUILDING_MODELS[i % BUILDING_MODELS.length];
+      const [minScale, maxScale] = scaleRangeFor(modelDef.category);
+      const scale = minScale + Math.random() * (maxScale - minScale);
+      const rotationY = Math.floor(Math.random() * 4) * (Math.PI / 2);
+      const approxHeight = (modelDef.category === "skyscraper" ? 3.9 : 2.4) * scale;
+
       specs.push({
-        position: [x, h / 2, z],
-        rotationY: Math.random() * Math.PI,
-        size: [w, h, d],
-        shape,
-        facadeIndex: i % facadeTextures.length,
-        isSignHost: i % 5 === 0,
-        height: h,
+        position: [x, 0, z],
+        rotationY,
+        modelUrl: modelDef.url,
+        scale,
+        approxHeight,
+        isSignHost: i % 5 === 0 && modelDef.category !== "low-detail",
       });
     }
     return specs;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const buildingRefs = useRef<(THREE.Mesh | null)[]>([]);
-
   useEffect(() => {
-    world.buildings = buildingRefs.current
-      .filter((m): m is THREE.Mesh => m !== null)
-      .map((mesh) => ({ box: new THREE.Box3().setFromObject(mesh) }));
+    // Collision boxes built directly from placement data (position/scale),
+    // not from waiting on the async GLTF to finish loading - the whole kit
+    // shares a fixed 2x2 unit footprint (confirmed by inspecting the raw
+    // GLBs), so this is accurate immediately and can't race the model load.
+    world.buildings = buildings.map((b) => {
+      const half = b.scale * FOOTPRINT_HALF_WIDTH_AT_SCALE_1;
+      return {
+        box: new THREE.Box3(
+          new THREE.Vector3(b.position[0] - half, 0, b.position[2] - half),
+          new THREE.Vector3(b.position[0] + half, 100, b.position[2] + half)
+        ),
+      };
+    });
   }, [buildings, world]);
 
   useEffect(() => {
@@ -102,30 +111,14 @@ export function City({ world, theme }: CityProps) {
       </mesh>
       <Roads />
 
-      {/* Buildings */}
+      {/* Buildings - real Kenney city-kit models */}
       {buildings.map((b, i) => (
         <group key={i}>
-          <mesh
-            ref={(m) => { buildingRefs.current[i] = m; }}
-            position={b.position}
-            rotation={[0, b.rotationY, 0]}
-            castShadow
-            receiveShadow
-          >
-            {b.shape === "box" && <boxGeometry args={b.size} />}
-            {b.shape === "cylinder" && <cylinderGeometry args={[b.size[0] * 0.4, b.size[0] * 0.5, b.size[1], 10]} />}
-            {b.shape === "cone" && <coneGeometry args={[b.size[0] * 0.5, b.size[1], 8]} />}
-            <meshStandardMaterial
-              color="#9aa4b2"
-              emissiveMap={facadeTextures[b.facadeIndex]}
-              emissive={new THREE.Color(0xffffff)}
-              emissiveIntensity={0.9}
-              roughness={0.85}
-              metalness={0.1}
-            />
-          </mesh>
+          <group position={b.position}>
+            <GLTFModel url={b.modelUrl} scale={b.scale} yOffset={b.scale} rotationY={b.rotationY} />
+          </group>
           {b.isSignHost && (
-            <mesh position={[b.position[0], b.height + 1.4, b.position[2]]} rotation={[0, b.rotationY + Math.PI, 0]}>
+            <mesh position={[b.position[0], b.approxHeight + 1.4, b.position[2]]} rotation={[0, b.rotationY + Math.PI, 0]}>
               <planeGeometry args={[8, 2]} />
               <meshBasicMaterial map={signTextures[i % signTextures.length]} transparent />
             </mesh>

@@ -3,6 +3,8 @@ import * as THREE from "three";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useKeyboard } from "./useKeyboard";
 import { CharacterModel, type CharacterHandle } from "./CharacterModel";
+import { GLTFModel } from "./GLTFModel";
+import { VEHICLE_MODELS } from "./vehicleModels";
 import type { WorldRefs } from "./worldRefs";
 import type { GadgetEffectsHandle } from "./GadgetEffects";
 import type { HazardCarsHandle } from "./HazardCars";
@@ -255,9 +257,19 @@ export function Player({ world, vehicle, gadgetEffectsRef, hazardCarsRef }: Play
     }
   });
 
+  const vehicleConfig = VEHICLE_MODELS[vehicle.id] ?? VEHICLE_MODELS.bicycle;
+
   return (
     <group ref={groupRef}>
       <CharacterModel onReady={(h) => { characterHandle.current = h; }} />
+      {vehicleConfig.url && (
+        // rotationY=0 is a starting guess for "front faces the player's forward
+        // direction (+Z at yaw=0)" - Kenney's car-kit turntable previews are the
+        // fastest way to check this kit's actual forward convention if the
+        // vehicle looks like it's driving sideways/backwards once you can see
+        // it running; adjust this single value (try Math.PI / 2 or Math.PI) if so.
+        <GLTFModel url={vehicleConfig.url} scale={vehicleConfig.scale} yOffset={vehicleConfig.yOffset} rotationY={0} />
+      )}
     </group>
   );
 }

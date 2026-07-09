@@ -25,7 +25,7 @@ export function EventsController({ world, theme, hazardCarsRef }: EventsControll
   const setActiveEvent = useGameStore((s) => s.setActiveEvent);
 
   const timerRef = useRef(0);
-  const nextAtRef = useRef(10 + Math.random() * 8);
+  const nextAtRef = useRef(4 + Math.random() * 4); // first event within ~4-8s, matching "the world immediately starts changing"
   const waterBaseline = theme?.mods.flood ? world.waterRaisedY : world.waterLoweredY;
 
   useEffect(() => {
