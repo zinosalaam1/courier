@@ -3,12 +3,12 @@ import { useGameStore } from "../store/gameStore";
 import { Auth } from "../backend/backend";
 import { GADGETS } from "../data/gameData";
 
-// Must match the fixed defaults in components/worldRefs.ts (createWorldRefs) -
-// these never vary by theme/package, so it's safe to mirror them here rather
-// than plumb the whole WorldRefs object through to the UI layer.
-const CITY_SIZE = 160;
-const DESTINATION = { x: 0, z: 55 };
-const START = { x: 0, z: -60 };
+// Fallback only for the brief window before Scene has set the real values
+// (window.__tourArcadeWorldMeta) - the actual map is now randomized per
+// mission (see cityGenerator.ts), so these can't be fixed constants anymore.
+const FALLBACK_CITY_SIZE = 220;
+const FALLBACK_DESTINATION = { x: 0, z: 55 };
+const FALLBACK_START = { x: 0, z: -60 };
 
 function formatTime(seconds: number) {
   const m = Math.floor(seconds / 60), s = Math.floor(seconds % 60);
@@ -110,16 +110,20 @@ function Minimap({ blackedOut, smoked }: { blackedOut: boolean; smoked: boolean 
         if (!blackedOut) {
           ctx.fillStyle = "#0d1117";
           ctx.fillRect(0, 0, 150, 150);
-          const scale = 150 / CITY_SIZE;
+          const meta = window.__tourArcadeWorldMeta;
+          const citySize = meta?.citySize ?? FALLBACK_CITY_SIZE;
+          const destination = meta?.destination ?? FALLBACK_DESTINATION;
+          const start = meta?.start ?? FALLBACK_START;
+          const scale = 150 / citySize;
           const toMap = (x: number, z: number) => [75 + x * scale, 75 + z * scale];
 
           // Destination
-          const [dx, dz] = toMap(DESTINATION.x, DESTINATION.z);
+          const [dx, dz] = toMap(destination.x, destination.z);
           ctx.fillStyle = "rgba(200,241,53,0.6)";
           ctx.beginPath(); ctx.arc(dx, dz, 4, 0, Math.PI * 2); ctx.fill();
 
           // Start
-          const [sx, sz] = toMap(START.x, START.z);
+          const [sx, sz] = toMap(start.x, start.z);
           ctx.fillStyle = "rgba(122,134,148,0.5)";
           ctx.beginPath(); ctx.arc(sx, sz, 3, 0, Math.PI * 2); ctx.fill();
 

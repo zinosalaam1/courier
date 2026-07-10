@@ -5,7 +5,7 @@ import { useGLTF } from "@react-three/drei";
 interface GLTFModelProps {
   url: string;
   scale?: number;
-  yOffset?: number;
+  minY?: number; // native (scale=1) lowest point of the model's real geometry - offset = -minY * scale lands the base at y=0
   rotationY?: number;
 }
 
@@ -17,11 +17,11 @@ interface GLTFModelProps {
  * split still applies, and failure renders nothing rather than crashing the
  * whole scene.
  */
-export function GLTFModel({ url, scale = 1, yOffset = 0, rotationY = 0 }: GLTFModelProps) {
+export function GLTFModel({ url, scale = 1, minY = 0, rotationY = 0 }: GLTFModelProps) {
   return (
     <ModelErrorBoundary>
       <Suspense fallback={null}>
-        <LoadedModel url={url} scale={scale} yOffset={yOffset} rotationY={rotationY} />
+        <LoadedModel url={url} scale={scale} minY={minY} rotationY={rotationY} />
       </Suspense>
     </ModelErrorBoundary>
   );
@@ -34,7 +34,7 @@ class ModelErrorBoundary extends Component<{ children: ReactNode }, { failed: bo
   render() { return this.state.failed ? null : this.props.children; }
 }
 
-function LoadedModel({ url, scale, yOffset, rotationY }: Required<GLTFModelProps>) {
+function LoadedModel({ url, scale, minY, rotationY }: Required<GLTFModelProps>) {
   const { scene } = useGLTF(url);
 
   // Clone so multiple instances of the same building/vehicle don't fight
@@ -49,5 +49,7 @@ function LoadedModel({ url, scale, yOffset, rotationY }: Required<GLTFModelProps
     });
   }, [cloned]);
 
-  return <primitive object={cloned} scale={scale} position={[0, yOffset, 0]} rotation={[0, rotationY, 0]} />;
+  // Ground alignment: a local point at y=minY needs to land at world y=0
+  // after scaling, so the object's own position.y must be -minY * scale.
+  return <primitive object={cloned} scale={scale} position={[0, -minY * scale, 0]} rotation={[0, rotationY, 0]} />;
 }

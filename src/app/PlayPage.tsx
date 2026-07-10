@@ -8,6 +8,7 @@ import { AuthPanel } from "../game/ui/AuthPanel";
 import { LeaderboardPanel } from "../game/ui/LeaderboardPanel";
 import { EndScreen } from "../game/ui/EndScreen";
 import { ChaosLobby } from "../game/multiplayer/ChaosLobby";
+import { CharacterSelect } from "../game/ui/CharacterSelect";
 import { useGameStore } from "../game/store/gameStore";
 import { Presence } from "../game/backend/backend";
 
@@ -46,6 +47,7 @@ export default function PlayPage() {
       {screen === "leaderboard" && <LeaderboardPanel />}
       {screen === "end" && <EndScreen />}
       {screen === "chaos" && <ChaosLobby />}
+      {screen === "character" && <CharacterSelect />}
     </div>
   );
 }

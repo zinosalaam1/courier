@@ -6,22 +6,26 @@
  * stay character-only (no vehicle mesh) rather than wrapping, say, a sedan
  * around a "bicycle" selection because it happened to be in the folder.
  *
- * yOffset accounts for this kit's consistent pivot convention (base sits at
- * local y = -1 across every sampled model) combined with each model's scale.
+ * yOffset values are real measured data (each model's minY from its actual
+ * POSITION accessor bounds, scaled), not a guessed uniform constant - an
+ * earlier pass wrongly assumed every model in this kit sits at local y=-1;
+ * only "delivery" actually does. race/race-future sit at -0.3, kart-oobi at
+ * -0.21. Using the wrong value per-model would either float or sink each
+ * vehicle depending on which one it was.
  */
 export interface VehicleModelConfig {
   url: string | null;
   scale: number;
-  yOffset: number;
+  minY: number; // native (scale=1) lowest point - yOffset applied at render time is minY * -scale
 }
 
 export const VEHICLE_MODELS: Record<string, VehicleModelConfig> = {
-  bicycle: { url: "/models/vehicles/kart-oobi.glb", scale: 0.55, yOffset: 0.55 },
-  moto: { url: "/models/vehicles/race.glb", scale: 0.9, yOffset: 0.9 },
-  van: { url: "/models/vehicles/delivery.glb", scale: 1.0, yOffset: 1.0 },
-  hover: { url: "/models/vehicles/race-future.glb", scale: 0.9, yOffset: 0.9 },
-  grapple: { url: null, scale: 1, yOffset: 0 },
-  drone: { url: null, scale: 1, yOffset: 0 },
-  teleport: { url: null, scale: 1, yOffset: 0 },
-  skateboard: { url: null, scale: 1, yOffset: 0 },
+  bicycle: { url: "/models/vehicles/kart-oobi.glb", scale: 1.3, minY: -0.2098 },
+  moto: { url: "/models/vehicles/race.glb", scale: 1.7, minY: -0.3 },
+  van: { url: "/models/vehicles/delivery.glb", scale: 1.0, minY: -1.0 },
+  hover: { url: "/models/vehicles/race-future.glb", scale: 1.7, minY: -0.3 },
+  grapple: { url: null, scale: 1, minY: 0 },
+  drone: { url: null, scale: 1, minY: 0 },
+  teleport: { url: null, scale: 1, minY: 0 },
+  skateboard: { url: null, scale: 1, minY: 0 },
 };

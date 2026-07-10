@@ -5,42 +5,18 @@ import type { WeeklyThemeDef } from "../data/gameData";
 import type { WorldRefs } from "./worldRefs";
 import { makeSignTexture } from "./textures";
 import { Roads } from "./Roads";
-import { ROAD_SEGMENTS } from "./roadLayout";
 import { GLTFModel } from "./GLTFModel";
-import { BUILDING_MODELS, FOOTPRINT_HALF_WIDTH_AT_SCALE_1, scaleRangeFor } from "./buildingModels";
+import type { SoloCityLayout } from "./cityGenerator";
 
 const SIGN_WORDS = ["COURIER", "ZERO", "DELIVER", "NO STOPS", "TOUR ARCADE"];
-
-/** True if (x,z) falls inside any road's corridor (plus a building setback),
- *  so procedural building placement can avoid dropping towers in the street. */
-function isOnRoad(x: number, z: number, setback = 3): boolean {
-  for (const road of ROAD_SEGMENTS) {
-    const halfW = road.width / 2 + setback;
-    if (road.axis === "ns") {
-      if (Math.abs(x - road.x) < halfW && Math.abs(z - road.z) < road.length / 2) return true;
-    } else {
-      if (Math.abs(z - road.z) < halfW && Math.abs(x - road.x) < road.length / 2) return true;
-    }
-  }
-  return false;
-}
 
 interface CityProps {
   world: WorldRefs;
   theme: WeeklyThemeDef | null;
+  layout: SoloCityLayout;
 }
 
-interface BuildingSpec {
-  position: [number, number, number];
-  rotationY: number; // always a multiple of 90deg - keeps the (square) footprint axis-aligned so the collision box built from placement data stays accurate at any rotation
-  modelUrl: string;
-  scale: number;
-  approxHeight: number; // for sign placement only, not collision (collision never used height, even pre-GLB)
-  isSignHost: boolean;
-}
-
-export function City({ world, theme }: CityProps) {
-  const heatMult = theme?.mods.heatMult ?? 1;
+export function City({ world, theme, layout }: CityProps) {
   const extraHazards = theme?.mods.extraHazards ?? false;
   const flooded = theme?.mods.flood ?? false;
 
@@ -48,55 +24,6 @@ export function City({ world, theme }: CityProps) {
     () => SIGN_WORDS.map((w, i) => makeSignTexture(w, i % 2 === 0 ? "#c8f135" : "#ff3b3b")),
     []
   );
-
-  const buildings: BuildingSpec[] = useMemo(() => {
-    const specs: BuildingSpec[] = [];
-    for (let i = 0; i < 30; i++) {
-      const angle = (i / 30) * Math.PI * 2;
-      let radius = 28 + (i % 3) * 18;
-      let x = Math.cos(angle) * radius, z = Math.sin(angle) * radius;
-
-      let attempts = 0;
-      while (isOnRoad(x, z) && attempts < 8) {
-        radius += 6;
-        x = Math.cos(angle) * radius; z = Math.sin(angle) * radius;
-        attempts++;
-      }
-
-      const modelDef = BUILDING_MODELS[i % BUILDING_MODELS.length];
-      const [minScale, maxScale] = scaleRangeFor(modelDef.category);
-      const scale = minScale + Math.random() * (maxScale - minScale);
-      const rotationY = Math.floor(Math.random() * 4) * (Math.PI / 2);
-      const approxHeight = (modelDef.category === "skyscraper" ? 3.9 : 2.4) * scale;
-
-      specs.push({
-        position: [x, 0, z],
-        rotationY,
-        modelUrl: modelDef.url,
-        scale,
-        approxHeight,
-        isSignHost: i % 5 === 0 && modelDef.category !== "low-detail",
-      });
-    }
-    return specs;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    // Collision boxes built directly from placement data (position/scale),
-    // not from waiting on the async GLTF to finish loading - the whole kit
-    // shares a fixed 2x2 unit footprint (confirmed by inspecting the raw
-    // GLBs), so this is accurate immediately and can't race the model load.
-    world.buildings = buildings.map((b) => {
-      const half = b.scale * FOOTPRINT_HALF_WIDTH_AT_SCALE_1;
-      return {
-        box: new THREE.Box3(
-          new THREE.Vector3(b.position[0] - half, 0, b.position[2] - half),
-          new THREE.Vector3(b.position[0] + half, 100, b.position[2] + half)
-        ),
-      };
-    });
-  }, [buildings, world]);
 
   useEffect(() => {
     world.waterCurrentY = flooded ? world.waterRaisedY : world.waterLoweredY;
@@ -109,39 +36,48 @@ export function City({ world, theme }: CityProps) {
         <planeGeometry args={[world.citySize, world.citySize, 20, 20]} />
         <meshStandardMaterial color="#171512" roughness={0.9} metalness={0.05} />
       </mesh>
-      <Roads />
+      <Roads segments={layout.roadSegments} intersections={layout.intersections} />
 
-      {/* Buildings - real Kenney city-kit models */}
-      {buildings.map((b, i) => (
-        <group key={i}>
-          <group position={b.position}>
-            <GLTFModel url={b.modelUrl} scale={b.scale} yOffset={b.scale} rotationY={b.rotationY} />
-          </group>
-          {b.isSignHost && (
-            <mesh position={[b.position[0], b.approxHeight + 1.4, b.position[2]]} rotation={[0, b.rotationY + Math.PI, 0]}>
-              <planeGeometry args={[8, 2]} />
-              <meshBasicMaterial map={signTextures[i % signTextures.length]} transparent />
-            </mesh>
-          )}
-        </group>
-      ))}
-
-      {/* Heat zones - Frozen package rule + Lava City theme */}
-      {[0, 1].map((i) => {
-        const r = 3.5 * heatMult;
-        const pos: [number, number, number] = [-20 + i * 40, 0.11, -20];
+      {/* Buildings - real Kenney city-kit models, one per block-placement from the generated layout */}
+      {layout.buildings.map((b, i) => {
+        const approxHeight = b.model.height * b.scale;
+        const isSignHost = i % 6 === 0 && b.model.category !== "low-detail";
         return (
           <group key={i}>
-            <mesh position={pos} receiveShadow>
-              <cylinderGeometry args={[r, r, 0.2, 24]} />
-              <meshStandardMaterial color="#ff3b3b" emissive="#ff3b3b" emissiveIntensity={1.4} roughness={0.4} />
-            </mesh>
-            <pointLight position={[pos[0], 1.5, pos[2]]} color="#ff3b3b" intensity={1.6} distance={r * 6} decay={2} />
+            <group position={[b.position[0], 0, b.position[1]]}>
+              <GLTFModel url={b.model.url} scale={b.scale} minY={0} rotationY={b.rotationY} />
+            </group>
+            {isSignHost && (
+              <mesh position={[b.position[0], approxHeight + 1.4, b.position[1]]} rotation={[0, b.rotationY + Math.PI, 0]}>
+                <planeGeometry args={[8, 2]} />
+                <meshBasicMaterial map={signTextures[i % signTextures.length]} transparent />
+              </mesh>
+            )}
           </group>
         );
       })}
 
-      {/* Water strip - Hover Bike / Drone crossing + Flood event / Heavy Rain theme */}
+      {/* Obstacles - cones/debris scattered along roads, real collidable hazards */}
+      {layout.obstacles.map((o, i) => (
+        <group key={i} position={[o.position[0], 0, o.position[1]]}>
+          <GLTFModel url={o.model.url} scale={o.scale} minY={o.model.minY} rotationY={o.rotationY} />
+        </group>
+      ))}
+
+      {/* Heat zones - Frozen package rule + Lava City theme (radius already
+          scaled by heatMult in Scene.tsx, so this stays consistent with the
+          actual gameplay distance check in Player.tsx) */}
+      {world.heatZones.map((z, i) => (
+        <group key={i}>
+          <mesh position={[z.position.x, 0.11, z.position.z]} receiveShadow>
+            <cylinderGeometry args={[z.radius, z.radius, 0.2, 24]} />
+            <meshStandardMaterial color="#ff3b3b" emissive="#ff3b3b" emissiveIntensity={1.4} roughness={0.4} />
+          </mesh>
+          <pointLight position={[z.position.x, 1.5, z.position.z]} color="#ff3b3b" intensity={1.6} distance={z.radius * 6} decay={2} />
+        </group>
+      ))}
+
+      {/* Water strip */}
       <WaterPlane world={world} />
 
       {/* Jump pad */}
@@ -182,7 +118,7 @@ export function City({ world, theme }: CityProps) {
 
       {/* Alien Invasion theme: extra hazard props scattered around */}
       {extraHazards && Array.from({ length: 4 }).map((_, i) => (
-        <mesh key={i} position={[(Math.random() - 0.5) * 40, 1.4, (Math.random() - 0.5) * 80]}>
+        <mesh key={i} position={[(Math.random() - 0.5) * world.citySize * 0.7, 1.4, (Math.random() - 0.5) * world.citySize * 0.7]}>
           <octahedronGeometry args={[1.4]} />
           <meshStandardMaterial color="#a78bfa" emissive="#a78bfa" emissiveIntensity={0.4} />
         </mesh>

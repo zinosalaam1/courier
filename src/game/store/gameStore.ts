@@ -1,8 +1,9 @@
 import { create } from "zustand";
 import { PACKAGES, VEHICLES, WEEKLY, REALITY_EVENTS, type PackageDef, type VehicleDef, type WeeklyThemeDef, type RealityEventDef } from "../data/gameData";
 import { Auth } from "../backend/backend";
+import { DEFAULT_CHARACTER_ID } from "../data/characters";
 
-export type GameScreen = "menu" | "auth" | "contract" | "mission" | "end" | "leaderboard" | "chaos";
+export type GameScreen = "menu" | "auth" | "contract" | "mission" | "end" | "leaderboard" | "chaos" | "character";
 
 interface ToastItem { id: number; text: string; }
 
@@ -42,6 +43,9 @@ interface GameStore {
 
   deepLink: { packageId: string | null; vehicleId: string | null; themeId: string | null };
   setDeepLink: (d: { packageId: string | null; vehicleId: string | null; themeId: string | null }) => void;
+
+  characterId: string;
+  setCharacterId: (id: string) => void;
 }
 
 let toastCounter = 0;
@@ -134,6 +138,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   deepLink: { packageId: null, vehicleId: null, themeId: null },
   setDeepLink: (d) => set({ deepLink: d }),
+
+  characterId: (() => {
+    try { return localStorage.getItem("tourarcade_character") || DEFAULT_CHARACTER_ID; }
+    catch { return DEFAULT_CHARACTER_ID; }
+  })(),
+  setCharacterId: (id) => {
+    try { localStorage.setItem("tourarcade_character", id); } catch { /* private browsing etc - selection just won't persist */ }
+    set({ characterId: id });
+  },
 }));
 
 // Convenience re-exports so components don't need to import from two places.

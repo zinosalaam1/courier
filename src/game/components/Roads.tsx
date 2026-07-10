@@ -1,21 +1,23 @@
 import { useMemo } from "react";
 import * as THREE from "three";
 import { makeRoadTexture } from "./textures";
-import { ROAD_SEGMENTS, INTERSECTIONS, type RoadSegment } from "./roadLayout";
+import { ROAD_SEGMENTS, INTERSECTIONS, type RoadSegment, type Intersection } from "./roadLayout";
 
 /** Real road geometry: asphalt strips along each segment, intersection patches
  *  where they cross, and lane markings built as individual axis-aligned box
  *  meshes (not a rotated texture) so "north-south" vs "east-west" roads never
- *  need more than one simple rotation to get right. */
-export function Roads() {
+ *  need more than one simple rotation to get right. Defaults to the old fixed
+ *  single-route layout (still used by multiplayer's ChaosCity); solo mode
+ *  passes its generated grid explicitly. */
+export function Roads({ segments = ROAD_SEGMENTS, intersections = INTERSECTIONS }: { segments?: RoadSegment[]; intersections?: Intersection[] }) {
   const asphaltTexture = useMemo(() => makeRoadTexture(), []);
 
   return (
     <group>
-      {ROAD_SEGMENTS.map((road, i) => (
+      {segments.map((road, i) => (
         <RoadStrip key={i} road={road} texture={asphaltTexture} />
       ))}
-      {INTERSECTIONS.map((it, i) => (
+      {intersections.map((it, i) => (
         <mesh key={i} position={[it.x, 0.02, it.z]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
           <planeGeometry args={[it.size, it.size]} />
           <meshStandardMaterial map={asphaltTexture} roughness={0.85} metalness={0.05} />

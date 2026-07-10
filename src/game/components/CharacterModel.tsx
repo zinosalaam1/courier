@@ -2,27 +2,33 @@ import { Component, Suspense, useEffect, useRef, type ReactNode } from "react";
 import * as THREE from "three";
 import { useGLTF, useAnimations } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
-
-const CHARACTER_URL = "https://threejs.org/examples/models/gltf/RobotExpressive/RobotExpressive.glb";
+import { computeBindPoseBoundingBox } from "./boundingBox";
+import { CHARACTERS, DEFAULT_CHARACTER_ID, type ProceduralColorScheme } from "../data/characters";
 
 export interface CharacterHandle {
   setAnimState: (speed: number, grounded: boolean, justJumped: boolean) => void;
 }
 
+const TARGET_HEIGHT = 1.8; // world units - keeps every character (and vehicles sized relative to it) at a consistent scale
+
 /**
- * Real rigged/animated character via GLTF (Idle/Walking/Running/Jump), with a
- * hand-built, hand-animated procedural fallback if the model can't load - no
- * network, a blocked CDN, whatever. `useGLTF` is Suspense-based (it throws a
- * promise while loading, not a catchable error), so the loading state is
- * handled by <Suspense> and load *failure* is handled by a real error
- * boundary - not a try/catch, which would incorrectly swallow the Suspense
- * promise and break the loading state entirely.
+ * Renders whichever character the player selected (see data/characters.ts).
+ * The one real rigged/animated model gets a Suspense (loading) + real error
+ * boundary (failure) split, same as before; procedural characters render
+ * directly since there's nothing to load or fail.
  */
-export function CharacterModel({ onReady }: { onReady: (handle: CharacterHandle) => void }) {
+export function CharacterModel({ characterId, onReady }: { characterId: string; onReady: (handle: CharacterHandle) => void }) {
+  const def = CHARACTERS.find((c) => c.id === characterId) ?? CHARACTERS.find((c) => c.id === DEFAULT_CHARACTER_ID)!;
+
+  if (!def.url) {
+    return <FallbackCharacter onReady={onReady} scheme={def.colorScheme!} />;
+  }
+
+  const fallbackScheme = CHARACTERS.find((c) => c.id === DEFAULT_CHARACTER_ID)!.colorScheme!;
   return (
-    <CharacterErrorBoundary fallback={<FallbackCharacter onReady={onReady} />}>
+    <CharacterErrorBoundary fallback={<FallbackCharacter onReady={onReady} scheme={fallbackScheme} />}>
       <Suspense fallback={null}>
-        <GltfCharacter onReady={onReady} />
+        <GltfCharacter url={def.url} onReady={onReady} />
       </Suspense>
     </CharacterErrorBoundary>
   );
@@ -35,33 +41,33 @@ class CharacterErrorBoundary extends Component<{ children: ReactNode; fallback: 
   render() { return this.state.failed ? this.props.fallback : this.props.children; }
 }
 
-// RobotExpressive.glb at its native scale is already roughly human-sized -
-// this is exactly how three.js's own official example
-// (webgl_animation_keyframes.html) uses it, with no extra scaling. Tweak
-// these two constants directly if it looks off in your build; don't be
-// tempted to bring back runtime Box3().setFromObject(scene) bounding-box
-// auto-scaling here - that measures the SkinnedMesh before its skeleton's
-// bind pose is established on first load, which is a well-known three.js
-// timing issue that produces a degenerate (near-zero or huge) box and made
-// the whole character effectively invisible (either way too large, with the
-// camera stuck inside it, or scaled down to nothing).
-const CHARACTER_SCALE = 1;
-const CHARACTER_Y_OFFSET = 0;
-
-function GltfCharacter({ onReady }: { onReady: (h: CharacterHandle) => void }) {
+function GltfCharacter({ url, onReady }: { url: string; onReady: (h: CharacterHandle) => void }) {
   const group = useRef<THREE.Group>(null);
-  const gltf = useGLTF(CHARACTER_URL); // suspends until loaded, or throws for the error boundary above
+  const gltf = useGLTF(url); // suspends until loaded, or throws for the error boundary above
   const { scene, animations } = gltf;
   const { actions } = useAnimations(animations, group);
   const currentAction = useRef<string | null>(null);
 
   useEffect(() => {
-    scene.scale.setScalar(CHARACTER_SCALE);
-    scene.position.y = CHARACTER_Y_OFFSET;
     scene.traverse((o) => {
       const mesh = o as THREE.Mesh;
       if (mesh.isMesh) { mesh.castShadow = true; mesh.receiveShadow = true; }
     });
+
+    // Auto-fit to a consistent height using the model's real bind-pose
+    // geometry bounds (see boundingBox.ts for why this is safe to do the
+    // instant the model loads, unlike THREE.Box3().setFromObject(scene)).
+    // This replaces an earlier fixed-scale guess that assumed the model was
+    // "already roughly human-sized" without ever actually measuring it -
+    // which was the real cause of vehicles looking undersized next to the
+    // character (the character was probably rendering larger than 1.8 units
+    // tall, throwing off every relative-scale decision made for vehicles).
+    const box = computeBindPoseBoundingBox(scene);
+    const height = Math.max(0.1, box.max.y - box.min.y);
+    const scale = TARGET_HEIGHT / height;
+    scene.scale.setScalar(scale);
+    scene.position.y = -box.min.y * scale;
+
     actions?.Idle?.reset().play();
     currentAction.current = "Idle";
   }, [scene, actions]);
@@ -90,8 +96,9 @@ function GltfCharacter({ onReady }: { onReady: (h: CharacterHandle) => void }) {
 }
 
 /** Hand-built, hand-animated low-poly humanoid (torso/head/arms/legs hierarchy) -
- *  a real articulated character, not a static shape. */
-function FallbackCharacter({ onReady }: { onReady: (h: CharacterHandle) => void }) {
+ *  a real articulated character, not a static shape. Proportions are set so
+ *  its own height matches TARGET_HEIGHT, same as the GLTF path. */
+function FallbackCharacter({ onReady, scheme }: { onReady: (h: CharacterHandle) => void; scheme: ProceduralColorScheme }) {
   const leftLeg = useRef<THREE.Group>(null);
   const rightLeg = useRef<THREE.Group>(null);
   const leftArm = useRef<THREE.Group>(null);
@@ -116,42 +123,43 @@ function FallbackCharacter({ onReady }: { onReady: (h: CharacterHandle) => void 
     if (torso.current) torso.current.rotation.x = THREE.MathUtils.lerp(torso.current.rotation.x, grounded ? Math.min(speed * 0.02, 0.18) : 0, dt * 4);
   });
 
+  // Total height: legs (0.72) + torso (0.72) + head radius (0.52) ~= 1.8, matching TARGET_HEIGHT.
   return (
     <group ref={torso} position={[0, 1.05, 0]}>
       <mesh castShadow>
         <boxGeometry args={[0.62, 0.72, 0.36]} />
-        <meshStandardMaterial color="#c8f135" emissive="#1a2000" roughness={0.6} metalness={0.2} />
+        <meshStandardMaterial color={scheme.body} emissive={scheme.bodyEmissive} roughness={0.6} metalness={0.2} />
       </mesh>
       <mesh position={[0, 0.55, 0]} castShadow>
         <sphereGeometry args={[0.26, 16, 12]} />
-        <meshStandardMaterial color="#1c2430" roughness={0.7} />
+        <meshStandardMaterial color={scheme.head} roughness={0.7} />
       </mesh>
       <group ref={leftArm} position={[-0.42, 0.34, 0]}>
         <mesh position={[0, -0.31, 0]} castShadow>
           <boxGeometry args={[0.16, 0.62, 0.16]} />
-          <meshStandardMaterial color="#2a3140" roughness={0.7} />
+          <meshStandardMaterial color={scheme.arms} roughness={0.7} />
         </mesh>
       </group>
       <group ref={rightArm} position={[0.42, 0.34, 0]}>
         <mesh position={[0, -0.31, 0]} castShadow>
           <boxGeometry args={[0.16, 0.62, 0.16]} />
-          <meshStandardMaterial color="#2a3140" roughness={0.7} />
+          <meshStandardMaterial color={scheme.arms} roughness={0.7} />
         </mesh>
       </group>
       <group ref={leftLeg} position={[-0.18, -0.36, 0]}>
         <mesh position={[0, -0.36, 0]} castShadow>
           <boxGeometry args={[0.2, 0.72, 0.2]} />
-          <meshStandardMaterial color="#11151c" roughness={0.7} />
+          <meshStandardMaterial color={scheme.legs} roughness={0.7} />
         </mesh>
       </group>
       <group ref={rightLeg} position={[0.18, -0.36, 0]}>
         <mesh position={[0, -0.36, 0]} castShadow>
           <boxGeometry args={[0.2, 0.72, 0.2]} />
-          <meshStandardMaterial color="#11151c" roughness={0.7} />
+          <meshStandardMaterial color={scheme.legs} roughness={0.7} />
         </mesh>
       </group>
     </group>
   );
 }
 
-useGLTF.preload(CHARACTER_URL);
+CHARACTERS.filter((c) => c.url).forEach((c) => useGLTF.preload(c.url!));

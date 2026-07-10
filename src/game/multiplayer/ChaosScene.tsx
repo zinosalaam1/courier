@@ -5,6 +5,8 @@ import { ChaosCity } from "./ChaosCity";
 import { CharacterModel, type CharacterHandle } from "../components/CharacterModel";
 import { useKeyboard } from "../components/useKeyboard";
 import { MultiplayerClient, type ChaosSnapshot } from "./MultiplayerClient";
+import { useGameStore } from "../store/gameStore";
+import { DEFAULT_CHARACTER_ID } from "../data/characters";
 
 // Module-level constant, not an inline object literal in JSX: R3F re-applies
 // the <Canvas camera={...}> prop whenever it changes reference, so a fresh
@@ -88,6 +90,7 @@ function LocalPlayer({ player }: { player: ChaosSnapshot["players"][number] }) {
   const characterHandle = useRef<CharacterHandle | null>(null);
   const keys = useKeyboard();
   const { camera } = useThree();
+  const characterId = useGameStore((s) => s.characterId);
 
   useFrame(() => {
     let turn = 0, move = 0;
@@ -111,7 +114,7 @@ function LocalPlayer({ player }: { player: ChaosSnapshot["players"][number] }) {
 
   return (
     <group ref={groupRef}>
-      <CharacterModel onReady={(h) => { characterHandle.current = h; }} />
+      <CharacterModel characterId={characterId} onReady={(h) => { characterHandle.current = h; }} />
     </group>
   );
 }
@@ -136,7 +139,7 @@ function RemotePlayer({ player }: { player: ChaosSnapshot["players"][number] }) 
 
   return (
     <group ref={groupRef}>
-      <CharacterModel onReady={(h) => { characterHandle.current = h; }} />
+      <CharacterModel characterId={DEFAULT_CHARACTER_ID} onReady={(h) => { characterHandle.current = h; }} />
     </group>
   );
 }

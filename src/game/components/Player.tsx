@@ -45,6 +45,7 @@ export function Player({ world, vehicle, gadgetEffectsRef, hazardCarsRef }: Play
   const applyRepairKit = useGameStore((s) => s.applyRepairKit);
   const setSmokeUntil = useGameStore((s) => s.setSmokeUntil);
   const pushToast = useGameStore((s) => s.pushToast);
+  const characterId = useGameStore((s) => s.characterId);
 
   // Gadget key handling (1-6). Reads store state fresh each press via getState()
   // to avoid re-subscribing this effect on every mission-meter change.
@@ -261,14 +262,14 @@ export function Player({ world, vehicle, gadgetEffectsRef, hazardCarsRef }: Play
 
   return (
     <group ref={groupRef}>
-      <CharacterModel onReady={(h) => { characterHandle.current = h; }} />
+      <CharacterModel characterId={characterId} onReady={(h) => { characterHandle.current = h; }} />
       {vehicleConfig.url && (
         // rotationY=0 is a starting guess for "front faces the player's forward
         // direction (+Z at yaw=0)" - Kenney's car-kit turntable previews are the
         // fastest way to check this kit's actual forward convention if the
         // vehicle looks like it's driving sideways/backwards once you can see
         // it running; adjust this single value (try Math.PI / 2 or Math.PI) if so.
-        <GLTFModel url={vehicleConfig.url} scale={vehicleConfig.scale} yOffset={vehicleConfig.yOffset} rotationY={0} />
+        <GLTFModel url={vehicleConfig.url} scale={vehicleConfig.scale} minY={vehicleConfig.minY} rotationY={0} />
       )}
     </group>
   );

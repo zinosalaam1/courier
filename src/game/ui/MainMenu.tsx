@@ -45,6 +45,12 @@ export function MainMenu() {
           </button>
           <button
             className="border border-[#c8f13524] px-5 py-3 font-['Chakra_Petch'] text-xs font-bold uppercase tracking-widest hover:border-[#c8f135] hover:text-[#c8f135]"
+            onClick={() => setScreen("character")}
+          >
+            Choose Courier
+          </button>
+          <button
+            className="border border-[#c8f13524] px-5 py-3 font-['Chakra_Petch'] text-xs font-bold uppercase tracking-widest hover:border-[#c8f135] hover:text-[#c8f135]"
             onClick={() => setScreen("leaderboard")}
           >
             Community Records
