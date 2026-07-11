@@ -7,6 +7,7 @@ import { makeSignTexture } from "./textures";
 import { Roads } from "./Roads";
 import { GLTFModel } from "./GLTFModel";
 import type { SoloCityLayout } from "./cityGenerator";
+import { Pedestrians } from "./Pedestrians";
 
 const SIGN_WORDS = ["COURIER", "ZERO", "DELIVER", "NO STOPS", "TOUR ARCADE"];
 
@@ -27,6 +28,7 @@ export function City({ world, theme, layout }: CityProps) {
 
   useEffect(() => {
     world.waterCurrentY = flooded ? world.waterRaisedY : world.waterLoweredY;
+    world.floodOverflow = flooded ? 10 : 0;
   }, [flooded, world]);
 
   return (
@@ -37,6 +39,18 @@ export function City({ world, theme, layout }: CityProps) {
         <meshStandardMaterial color="#171512" roughness={0.9} metalness={0.05} />
       </mesh>
       <Roads segments={layout.roadSegments} intersections={layout.intersections} />
+
+      {/* Crosswalks - real painted road markings, not just gray asphalt */}
+      {layout.crosswalks.map((c, i) => (
+        <group key={i} position={[c.x, 0.025, c.z]}>
+          {[-5, -3, -1, 1, 3, 5].map((offset) => (
+            <mesh key={offset} position={offset % 2 === 0 ? [offset, 0, 0] : [0, 0, offset]} rotation={[-Math.PI / 2, 0, 0]}>
+              <planeGeometry args={[1.1, 5]} />
+              <meshStandardMaterial color="#e8e4d8" roughness={0.8} />
+            </mesh>
+          ))}
+        </group>
+      ))}
 
       {/* Buildings - real Kenney city-kit models, one per block-placement from the generated layout */}
       {layout.buildings.map((b, i) => {
@@ -64,6 +78,19 @@ export function City({ world, theme, layout }: CityProps) {
         </group>
       ))}
 
+      {/* Park - grass patch + procedural trees, one full block instead of buildings */}
+      {layout.parks.map((p, i) => (
+        <group key={i}>
+          <mesh position={[p.x, 0.02, p.z]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+            <planeGeometry args={[p.halfX * 2, p.halfZ * 2]} />
+            <meshStandardMaterial color="#2f4a26" roughness={1} />
+          </mesh>
+          {p.trees.map((t, ti) => (
+            <Tree key={ti} x={t.x} z={t.z} scale={t.scale} />
+          ))}
+        </group>
+      ))}
+
       {/* Heat zones - Frozen package rule + Lava City theme (radius already
           scaled by heatMult in Scene.tsx, so this stays consistent with the
           actual gameplay distance check in Player.tsx) */}
@@ -77,8 +104,13 @@ export function City({ world, theme, layout }: CityProps) {
         </group>
       ))}
 
-      {/* Water strip */}
-      <WaterPlane world={world} />
+      {/* Lake - a real body of water, not a strip across the whole map */}
+      <Lake world={world} />
+
+      {/* Boundary walls - the playable city is now visibly bounded */}
+      {layout.boundaryWalls.map((w, i) => (
+        <BoundaryWall key={i} wall={w} />
+      ))}
 
       {/* Jump pad */}
       <mesh position={world.jumpPadPosition}>
@@ -123,19 +155,51 @@ export function City({ world, theme, layout }: CityProps) {
           <meshStandardMaterial color="#a78bfa" emissive="#a78bfa" emissiveIntensity={0.4} />
         </mesh>
       ))}
+
+      <Pedestrians layout={layout} />
     </group>
   );
 }
 
-function WaterPlane({ world }: { world: WorldRefs }) {
+function Lake({ world }: { world: WorldRefs }) {
   const ref = useRef<THREE.Mesh>(null);
-  useFrame(() => {
-    if (ref.current) ref.current.position.y = THREE.MathUtils.lerp(ref.current.position.y, world.waterCurrentY, 0.05);
+  useFrame(({ clock }) => {
+    if (!ref.current) return;
+    ref.current.position.y = THREE.MathUtils.lerp(ref.current.position.y, world.waterCurrentY, 0.05);
+    // Gentle shimmer - a real animated material without needing a custom shader.
+    const mat = ref.current.material as THREE.MeshStandardMaterial;
+    mat.emissiveIntensity = 0.12 + Math.sin(clock.elapsedTime * 0.8) * 0.05;
   });
   return (
-    <mesh ref={ref} rotation={[-Math.PI / 2, 0, 0]} position={[0, world.waterCurrentY, world.waterZ]}>
-      <planeGeometry args={[world.citySize, 10]} />
-      <meshStandardMaterial color="#1b3a4d" transparent opacity={0.75} />
+    <mesh ref={ref} rotation={[-Math.PI / 2, 0, 0]} position={[world.lake.x, world.waterCurrentY, world.lake.z]} receiveShadow>
+      <circleGeometry args={[Math.max(world.lake.radiusX, world.lake.radiusZ), 32]} />
+      <meshStandardMaterial color="#1b5a7d" emissive="#3a8ab0" emissiveIntensity={0.12} transparent opacity={0.85} roughness={0.15} metalness={0.3} />
     </mesh>
+  );
+}
+
+function BoundaryWall({ wall }: { wall: { x: number; z: number; length: number; axis: "ns" | "ew" } }) {
+  const isEW = wall.axis === "ew";
+  const size: [number, number, number] = isEW ? [wall.length, 6, 2] : [2, 6, wall.length];
+  return (
+    <mesh position={[wall.x, 3, wall.z]} castShadow receiveShadow>
+      <boxGeometry args={size} />
+      <meshStandardMaterial color="#1c222c" roughness={0.75} metalness={0.4} emissive="#0a1420" emissiveIntensity={0.3} />
+    </mesh>
+  );
+}
+
+function Tree({ x, z, scale }: { x: number; z: number; scale: number }) {
+  return (
+    <group position={[x, 0, z]} scale={scale}>
+      <mesh position={[0, 0.6, 0]} castShadow>
+        <cylinderGeometry args={[0.15, 0.2, 1.2, 6]} />
+        <meshStandardMaterial color="#4a3524" roughness={0.9} />
+      </mesh>
+      <mesh position={[0, 1.7, 0]} castShadow>
+        <sphereGeometry args={[0.9, 8, 8]} />
+        <meshStandardMaterial color="#2f6b2f" roughness={0.9} />
+      </mesh>
+    </group>
   );
 }

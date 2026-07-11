@@ -63,12 +63,13 @@ export function HUD() {
       </div>
 
       <div className="absolute left-5 top-24 w-[260px] space-y-2">
+        <Meter
+          label={rules?.id === "unstable" ? "Integrity (fragile to impacts)" : rules?.id === "fragile" ? "Integrity (fragile to falls)" : "Package Condition"}
+          value={mission.integrity}
+          color={rules?.id === "unstable" ? "#f97316" : rules?.id === "fragile" ? "#60a5fa" : "#c8f135"}
+        />
         {rules?.id === "frozen" && <Meter label="Heat" value={mission.heat} color="#67e8f9" />}
         {rules?.id === "radioactive" && <Meter label="Radiation" value={mission.radiation} color="#c8f135" />}
-        {rules?.id === "unstable" && <Meter label="Integrity" value={mission.integrity} color="#f97316" />}
-        {rules?.id === "fragile" && (
-          <Meter label="Integrity (fall risk)" value={100 - Math.min(100, (mission.lastImpactSpeed / (rules.fallLimit ?? 6)) * 100)} color="#60a5fa" />
-        )}
       </div>
 
       {mission.activeEvent && (

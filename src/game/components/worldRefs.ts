@@ -18,10 +18,11 @@ export interface WorldRefs {
   teleporters: [THREE.Vector3, THREE.Vector3];
   startPosition: THREE.Vector3;
   destinationPosition: THREE.Vector3;
-  waterZ: number;
+  lake: { x: number; z: number; radiusX: number; radiusZ: number };
   waterRaisedY: number;
   waterLoweredY: number;
   waterCurrentY: number;
+  floodOverflow: number; // extra radius added to the lake's hazard bounds during Flood/Heavy Rain
   citySize: number;
 
   // Reality-event effect flags - mutated directly by EventsController and read
@@ -46,10 +47,11 @@ export function createWorldRefs(): WorldRefs {
     teleporters: [new THREE.Vector3(-15, 0.5, 15), new THREE.Vector3(15, 0.5, -35)],
     startPosition: new THREE.Vector3(0, 0, -60),
     destinationPosition: new THREE.Vector3(0, 0, 55),
-    waterZ: 25,
-    waterRaisedY: 0.6,
-    waterLoweredY: -3,
-    waterCurrentY: -3,
+    lake: { x: 0, z: 0, radiusX: 12, radiusZ: 12 },
+    waterRaisedY: 1.5,
+    waterLoweredY: 0.15,
+    waterCurrentY: 0.15,
+    floodOverflow: 0,
     citySize: 160,
     gravityOverride: null,
     reverseControls: false,

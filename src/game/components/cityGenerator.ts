@@ -16,18 +16,34 @@ export interface PlacedObstacle {
   rotationY: number;
 }
 
+export interface BoundaryWall {
+  x: number; z: number; length: number; axis: "ns" | "ew";
+}
+
+export interface ParkBlock {
+  x: number; z: number; halfX: number; halfZ: number;
+  trees: { x: number; z: number; scale: number }[];
+}
+
+export interface Crosswalk {
+  x: number; z: number; axis: "ns" | "ew";
+}
+
 export interface SoloCityLayout {
   citySize: number;
   roadSegments: RoadSegment[];
   intersections: Intersection[];
+  crosswalks: Crosswalk[];
   buildings: PlacedBuilding[];
   obstacles: PlacedObstacle[];
+  boundaryWalls: BoundaryWall[];
+  parks: ParkBlock[];
+  lake: { x: number; z: number; radiusX: number; radiusZ: number };
   startPosition: { x: number; z: number };
   destinationPosition: { x: number; z: number };
   heatZones: { x: number; z: number; radius: number }[];
   jumpPadPosition: { x: number; z: number };
   teleporters: [{ x: number; z: number }, { x: number; z: number }];
-  waterZ: number;
 }
 
 const STREET_COORDS = [-80, -40, 0, 40, 80]; // both axes - a real 4x4 block grid, not one straight road
@@ -48,6 +64,17 @@ export function generateSoloCityLayout(): SoloCityLayout {
   });
   const intersections: Intersection[] = [];
   for (const x of STREET_COORDS) for (const z of STREET_COORDS) intersections.push({ x, z, size: 13 });
+  const crosswalks: Crosswalk[] = intersections.map((it) => ({ x: it.x, z: it.z, axis: "ns" as const }));
+
+  // Perimeter walls - a few units inside the true ground-plane edge, so the
+  // playable area is visibly bounded instead of open into empty space.
+  const wallHalf = CITY_SIZE / 2 - 6;
+  const boundaryWalls: BoundaryWall[] = [
+    { x: 0, z: wallHalf, length: wallHalf * 2, axis: "ew" },
+    { x: 0, z: -wallHalf, length: wallHalf * 2, axis: "ew" },
+    { x: wallHalf, z: 0, length: wallHalf * 2, axis: "ns" },
+    { x: -wallHalf, z: 0, length: wallHalf * 2, axis: "ns" },
+  ];
 
   // Start/destination: two distinct grid intersections, far apart on BOTH
   // axes so the route is a real diagonal traverse across blocks rather than
@@ -66,14 +93,46 @@ export function generateSoloCityLayout(): SoloCityLayout {
 
   // Buildings: 1-3 per block, placed inside the block interior (inset from
   // the surrounding roads), rejecting placements that would overlap a
-  // building already placed in the same block.
+  // building already placed in the same block. Two blocks are set aside as
+  // a park and a lake instead of getting buildings, so the city isn't wall-
+  // to-wall towers.
+  const totalBlocks = (STREET_COORDS.length - 1) * (STREET_COORDS.length - 1);
+  const blockKey = (bx: number, bz: number) => bx * (STREET_COORDS.length - 1) + bz;
+  const specialBlocks = new Set<number>();
+  while (specialBlocks.size < 2) specialBlocks.add(Math.floor(Math.random() * totalBlocks));
+  const [parkBlockKey, lakeBlockKey] = Array.from(specialBlocks);
+
   const buildings: PlacedBuilding[] = [];
+  const parks: ParkBlock[] = [];
+  let lake = { x: 0, z: 0, radiusX: 12, radiusZ: 12 };
+
   for (let bx = 0; bx < STREET_COORDS.length - 1; bx++) {
     for (let bz = 0; bz < STREET_COORDS.length - 1; bz++) {
       const xMin = STREET_COORDS[bx] + ROAD_WIDTH_MAIN / 2 + 4;
       const xMax = STREET_COORDS[bx + 1] - ROAD_WIDTH_MAIN / 2 - 4;
       const zMin = STREET_COORDS[bz] + ROAD_WIDTH_MAIN / 2 + 4;
       const zMax = STREET_COORDS[bz + 1] - ROAD_WIDTH_MAIN / 2 - 4;
+      const cx = (xMin + xMax) / 2, cz = (zMin + zMax) / 2;
+      const key = blockKey(bx, bz);
+
+      if (key === lakeBlockKey) {
+        lake = { x: cx, z: cz, radiusX: (xMax - xMin) / 2 - 2, radiusZ: (zMax - zMin) / 2 - 2 };
+        continue;
+      }
+      if (key === parkBlockKey) {
+        const trees: ParkBlock["trees"] = [];
+        const treeCount = 5 + Math.floor(Math.random() * 4);
+        for (let t = 0; t < treeCount; t++) {
+          trees.push({
+            x: xMin + Math.random() * (xMax - xMin),
+            z: zMin + Math.random() * (zMax - zMin),
+            scale: 1.2 + Math.random() * 0.8,
+          });
+        }
+        parks.push({ x: cx, z: cz, halfX: (xMax - xMin) / 2, halfZ: (zMax - zMin) / 2, trees });
+        continue;
+      }
+
       const count = 1 + Math.floor(Math.random() * 3);
       const placedInBlock: { x: number; z: number; half: number }[] = [];
 
@@ -121,8 +180,12 @@ export function generateSoloCityLayout(): SoloCityLayout {
     citySize: CITY_SIZE,
     roadSegments,
     intersections,
+    crosswalks,
     buildings,
     obstacles,
+    boundaryWalls,
+    parks,
+    lake,
     startPosition,
     destinationPosition,
     heatZones: [
@@ -134,6 +197,5 @@ export function generateSoloCityLayout(): SoloCityLayout {
       { x: STREET_COORDS[0] + 10, z: STREET_COORDS[1] },
       { x: STREET_COORDS[4] - 10, z: STREET_COORDS[3] },
     ],
-    waterZ: STREET_COORDS[2] + 25,
   };
 }

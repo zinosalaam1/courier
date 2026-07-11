@@ -27,6 +27,7 @@ export function EventsController({ world, theme, hazardCarsRef }: EventsControll
   const timerRef = useRef(0);
   const nextAtRef = useRef(4 + Math.random() * 4); // first event within ~4-8s, matching "the world immediately starts changing"
   const waterBaseline = theme?.mods.flood ? world.waterRaisedY : world.waterLoweredY;
+  const overflowBaseline = theme?.mods.flood ? 10 : 0;
 
   useEffect(() => {
     // Permanent forced event from a weekly theme (Upside Down City / Cyber Attack).
@@ -69,7 +70,8 @@ export function EventsController({ world, theme, hazardCarsRef }: EventsControll
       }
       case "flood":
         world.waterCurrentY = world.waterRaisedY;
-        if (isFinite(durationMs)) setTimeout(() => { world.waterCurrentY = waterBaseline; }, durationMs);
+        world.floodOverflow = 10;
+        if (isFinite(durationMs)) setTimeout(() => { world.waterCurrentY = waterBaseline; world.floodOverflow = overflowBaseline; }, durationMs);
         break;
       case "quake":
         world.quakeUntil = performance.now() + durationMs;

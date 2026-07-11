@@ -46,6 +46,11 @@ export function Player({ world, vehicle, gadgetEffectsRef, hazardCarsRef }: Play
   const setSmokeUntil = useGameStore((s) => s.setSmokeUntil);
   const pushToast = useGameStore((s) => s.pushToast);
   const characterId = useGameStore((s) => s.characterId);
+  const packageColor = useGameStore((s) => {
+    if (!s.mission) return "#7a8694";
+    const rules = s.mission.pkg.id === "unknown" ? s.mission.revealedUnknown : s.mission.pkg;
+    return rules?.color ?? s.mission.pkg.color;
+  });
 
   // Gadget key handling (1-6). Reads store state fresh each press via getState()
   // to avoid re-subscribing this effect on every mission-meter change.
@@ -113,9 +118,11 @@ export function Player({ world, vehicle, gadgetEffectsRef, hazardCarsRef }: Play
     yaw.current += turnInput * vehicle.turn * dt;
 
     const heavyPenalty = m.pkg.speedMult ?? 1;
-    const flooded = world.waterCurrentY > -1 && Math.abs(pos.current.z - world.waterZ) < 5;
+    const lakeHalfX = world.lake.radiusX + world.floodOverflow;
+    const lakeHalfZ = world.lake.radiusZ + world.floodOverflow;
+    const inLake = Math.abs(pos.current.x - world.lake.x) < lakeHalfX && Math.abs(pos.current.z - world.lake.z) < lakeHalfZ;
     const tractionMult = m.theme?.mods.traction ?? 1;
-    const maxSpeed = vehicle.speed * heavyPenalty * (flooded && !vehicle.water ? 0.35 : 1) * tractionMult;
+    const maxSpeed = vehicle.speed * heavyPenalty * (inLake && !vehicle.water ? 0.35 : 1) * tractionMult;
 
     const forward = new THREE.Vector3(Math.sin(yaw.current), 0, Math.cos(yaw.current));
     const targetVel = forward.clone().multiplyScalar(moveInput * maxSpeed);
@@ -123,6 +130,7 @@ export function Player({ world, vehicle, gadgetEffectsRef, hazardCarsRef }: Play
     vel.current.z += (targetVel.z - vel.current.z) * Math.min(1, vehicle.accel * dt);
 
     let justJumped = false;
+    let justLanded = false;
     if (vehicle.fly && flightActive.current) {
       pos.current.y = THREE.MathUtils.lerp(pos.current.y, 3.2, dt * 2);
       if (vehicle.fuel) {
@@ -133,7 +141,7 @@ export function Player({ world, vehicle, gadgetEffectsRef, hazardCarsRef }: Play
       vel.current.y += gravity * dt;
       if (pos.current.y <= 0.01) {
         pos.current.y = 0;
-        if (!onGround.current) lastImpactSpeed.current = Math.abs(vel.current.y);
+        if (!onGround.current) { lastImpactSpeed.current = Math.abs(vel.current.y); justLanded = true; }
         vel.current.y = 0;
         onGround.current = true;
       } else {
@@ -200,8 +208,15 @@ export function Player({ world, vehicle, gadgetEffectsRef, hazardCarsRef }: Play
     camera.rotation.z = performance.now() < world.upsideUntil ? Math.PI : 0;
     camera.lookAt(pos.current.x, pos.current.y + 1.2, pos.current.z);
 
-    // Character animation
-    characterHandle.current?.setAnimState(horizSpeed, onGround.current, justJumped);
+    // Character animation - forced to Idle while riding a vehicle (no
+    // "sitting" animation exists, so a still pose reads far better than legs
+    // cycling through a running gait while visibly on a kart/motorcycle/van).
+    const vehicleConfig = VEHICLE_MODELS[vehicle.id] ?? VEHICLE_MODELS.bicycle;
+    if (vehicleConfig.url) {
+      characterHandle.current?.setAnimState(0, true, false);
+    } else {
+      characterHandle.current?.setAnimState(horizSpeed, onGround.current, justJumped);
+    }
 
     // ---- Package mission-rule evaluation ----
     const rules = m.pkg.id === "unknown" ? m.revealedUnknown : m.pkg;
@@ -217,10 +232,6 @@ export function Player({ world, vehicle, gadgetEffectsRef, hazardCarsRef }: Play
       }
     }
 
-    if (rules?.id === "fragile" && onGround.current && lastImpactSpeed.current > (rules.fallLimit ?? Infinity)) {
-      endMission(false, "The fragile package shattered on impact.");
-      return;
-    }
     if (rules?.id === "frozen") {
       const heat = THREE.MathUtils.clamp(m.heat + (nearHeat ? dt * 22 : -dt * 8), 0, 100);
       updateMissionMeters({ heat });
@@ -231,8 +242,25 @@ export function Player({ world, vehicle, gadgetEffectsRef, hazardCarsRef }: Play
       updateMissionMeters({ radiation });
       if (radiation >= (rules.radiationCap ?? 100)) { endMission(false, "Radiation levels critical. Containment failed."); return; }
     }
-    if (rules?.id === "unstable" && m.integrity <= 0) {
-      endMission(false, "The unstable package took one hit too many.");
+
+    // Universal fall-impact damage, applied once per landing (not every
+    // frame while grounded - see the justLanded flag above). Every package
+    // type has real risk from a hard landing now; Fragile takes it far more
+    // severely and can still shatter outright on a genuinely bad fall.
+    if (justLanded && !vehicle.fly) {
+      const fragileLimit = rules?.fallLimit ?? 6.0;
+      if (rules?.id === "fragile" && lastImpactSpeed.current > fragileLimit) {
+        endMission(false, "The fragile package shattered on impact.");
+        return;
+      }
+      if (lastImpactSpeed.current > 8) {
+        const severity = rules?.id === "fragile" ? 3 : rules?.id === "unstable" ? 1.3 : 1;
+        const damage = Math.min(60, (lastImpactSpeed.current - 8) * 6 * severity);
+        if (damage > 0) updateMissionMeters({ integrity: Math.max(0, m.integrity - damage) });
+      }
+    }
+    if (m.integrity <= 0) {
+      endMission(false, "The package was damaged beyond repair.");
       return;
     }
     if (rules?.timeLimit) {
@@ -263,6 +291,10 @@ export function Player({ world, vehicle, gadgetEffectsRef, hazardCarsRef }: Play
   return (
     <group ref={groupRef}>
       <CharacterModel characterId={characterId} onReady={(h) => { characterHandle.current = h; }} />
+      <mesh position={[0, 1.55, -0.32]} rotation={[0.15, 0, 0]} castShadow>
+        <boxGeometry args={[0.34, 0.34, 0.3]} />
+        <meshStandardMaterial color={packageColor} emissive={packageColor} emissiveIntensity={0.35} roughness={0.6} />
+      </mesh>
       {vehicleConfig.url && (
         // rotationY=0 is a starting guess for "front faces the player's forward
         // direction (+Z at yaw=0)" - Kenney's car-kit turntable previews are the

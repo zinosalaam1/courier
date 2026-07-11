@@ -112,10 +112,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
   registerCollision: (armored) => {
     const m = get().mission;
     if (!m) return;
+    if (armored) return; // the Van absorbs collision damage entirely, for any package
     const activeId = m.pkg.id === "unknown" ? m.revealedUnknown?.id : m.pkg.id;
-    if (activeId === "unstable" && !armored) {
-      set({ mission: { ...m, integrity: Math.max(0, m.integrity - 22) } });
-    }
+    // Every package takes some real damage from a hard hit now - previously
+    // only "Unstable" had any collision risk at all, which meant every other
+    // package type (including the default "Standard") was completely immune
+    // to reckless driving. Unstable keeps a much harsher penalty on top.
+    const damage = activeId === "unstable" ? 25 : activeId === "fragile" ? 16 : 8;
+    set({ mission: { ...m, integrity: Math.max(0, m.integrity - damage) } });
   },
 
   applyRepairKit: () => {

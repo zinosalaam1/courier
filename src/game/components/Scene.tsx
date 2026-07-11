@@ -7,6 +7,7 @@ import { HazardCars, type HazardCarsHandle } from "./HazardCars";
 import { GadgetEffects, type GadgetEffectsHandle } from "./GadgetEffects";
 import { EventsController } from "./EventsController";
 import { Rain } from "./Rain";
+import { Clouds } from "./Clouds";
 import { makeSkyTexture } from "./textures";
 import { createWorldRefs, type WorldRefs } from "./worldRefs";
 import { generateSoloCityLayout, type SoloCityLayout } from "./cityGenerator";
@@ -43,7 +44,7 @@ function useMissionWorld(theme: WeeklyThemeDef | null): { world: WorldRefs; layo
       new THREE.Vector3(layout.teleporters[0].x, 0.5, layout.teleporters[0].z),
       new THREE.Vector3(layout.teleporters[1].x, 0.5, layout.teleporters[1].z),
     ];
-    world.waterZ = layout.waterZ;
+    world.lake = layout.lake;
 
     window.__tourArcadeWorldMeta = {
       citySize: world.citySize,
@@ -73,6 +74,17 @@ function useMissionWorld(theme: WeeklyThemeDef | null): { world: WorldRefs; layo
           box: new THREE.Box3(
             new THREE.Vector3(o.position[0] - halfX, 0, o.position[1] - halfZ),
             new THREE.Vector3(o.position[0] + halfX, 10, o.position[1] + halfZ)
+          ),
+        };
+      }),
+      ...layout.boundaryWalls.map((w) => {
+        const halfLen = w.length / 2, thickness = 2;
+        const halfX = w.axis === "ew" ? halfLen : thickness;
+        const halfZ = w.axis === "ew" ? thickness : halfLen;
+        return {
+          box: new THREE.Box3(
+            new THREE.Vector3(w.x - halfX, 0, w.z - halfZ),
+            new THREE.Vector3(w.x + halfX, 20, w.z + halfZ)
           ),
         };
       }),
@@ -189,6 +201,7 @@ function SceneContents({
       <GadgetEffects ref={gadgetEffectsRef} world={world} />
       <EventsController world={world} theme={theme} hazardCarsRef={hazardCarsRef} />
       <Rain active={Boolean(theme?.mods.rainVisual)} citySize={world.citySize} />
+      <Clouds citySize={world.citySize} />
     </>
   );
 }
