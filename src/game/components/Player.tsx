@@ -8,6 +8,7 @@ import { VEHICLE_MODELS } from "./vehicleModels";
 import type { WorldRefs } from "./worldRefs";
 import type { GadgetEffectsHandle } from "./GadgetEffects";
 import type { HazardCarsHandle } from "./HazardCars";
+import type { CopHandle } from "./CopCar";
 import { useGameStore } from "../store/gameStore";
 import { Presence } from "../backend/backend";
 import type { VehicleDef } from "../data/gameData";
@@ -17,12 +18,13 @@ interface PlayerProps {
   vehicle: VehicleDef;
   gadgetEffectsRef: RefObject<GadgetEffectsHandle>;
   hazardCarsRef: RefObject<HazardCarsHandle>;
+  copRef: RefObject<CopHandle>;
 }
 
 const DEFAULT_GRAVITY = -22;
 const STILL_SPEED_THRESHOLD = 0.6;
 
-export function Player({ world, vehicle, gadgetEffectsRef, hazardCarsRef }: PlayerProps) {
+export function Player({ world, vehicle, gadgetEffectsRef, hazardCarsRef, copRef }: PlayerProps) {
   const groupRef = useRef<THREE.Group>(null);
   const { camera } = useThree();
   const keys = useKeyboard();
@@ -65,8 +67,11 @@ export function Player({ world, vehicle, gadgetEffectsRef, hazardCarsRef }: Play
           const near = world.hazardCars
             .slice()
             .sort((a, b) => a.mesh.position.distanceTo(pos.current) - b.mesh.position.distanceTo(pos.current))[0];
-          if (near) { near.disabledUntil = performance.now() + 6000; pushToast("EMP disabled a hazard vehicle."); }
-          else pushToast("No hazard in range for EMP.");
+          const hadTarget = Boolean(near) || window.__tourArcadeCopActive;
+          if (near) near.disabledUntil = performance.now() + 6000;
+          copRef.current?.disable(6000); // no-op if no cop is currently active
+          if (near && !window.__tourArcadeCopActive) pushToast("EMP disabled a hazard vehicle.");
+          else if (!hadTarget) pushToast("No hazard in range for EMP.");
           break;
         }
         case 1: { // Portable Bridge

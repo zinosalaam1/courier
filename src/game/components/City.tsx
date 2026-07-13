@@ -8,6 +8,7 @@ import { Roads } from "./Roads";
 import { GLTFModel } from "./GLTFModel";
 import type { SoloCityLayout } from "./cityGenerator";
 import { Pedestrians } from "./Pedestrians";
+import { TREE_MODELS, TREE_SCALE_RANGE } from "./natureModels";
 
 const SIGN_WORDS = ["COURIER", "ZERO", "DELIVER", "NO STOPS", "TOUR ARCADE"];
 
@@ -24,6 +25,22 @@ export function City({ world, theme, layout }: CityProps) {
   const signTextures = useMemo(
     () => SIGN_WORDS.map((w, i) => makeSignTexture(w, i % 2 === 0 ? "#c8f135" : "#ff3b3b")),
     []
+  );
+
+  // Precomputed once (not re-rolled every render) so tree species/scale stay
+  // stable for the lifetime of the mission instead of flickering between models.
+  const treeInstances = useMemo(
+    () =>
+      layout.parks.flatMap((p) =>
+        p.trees.map((t) => ({
+          x: t.x,
+          z: t.z,
+          model: TREE_MODELS[Math.floor(Math.random() * TREE_MODELS.length)],
+          scale: TREE_SCALE_RANGE[0] + Math.random() * (TREE_SCALE_RANGE[1] - TREE_SCALE_RANGE[0]),
+          rotationY: Math.random() * Math.PI * 2,
+        }))
+      ),
+    [layout.parks]
   );
 
   useEffect(() => {
@@ -78,17 +95,15 @@ export function City({ world, theme, layout }: CityProps) {
         </group>
       ))}
 
-      {/* Park - grass patch + procedural trees, one full block instead of buildings */}
+      {/* Park - grass patch + real trees, one full block instead of buildings */}
       {layout.parks.map((p, i) => (
-        <group key={i}>
-          <mesh position={[p.x, 0.02, p.z]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-            <planeGeometry args={[p.halfX * 2, p.halfZ * 2]} />
-            <meshStandardMaterial color="#2f4a26" roughness={1} />
-          </mesh>
-          {p.trees.map((t, ti) => (
-            <Tree key={ti} x={t.x} z={t.z} scale={t.scale} />
-          ))}
-        </group>
+        <mesh key={i} position={[p.x, 0.02, p.z]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+          <planeGeometry args={[p.halfX * 2, p.halfZ * 2]} />
+          <meshStandardMaterial color="#2f4a26" roughness={1} />
+        </mesh>
+      ))}
+      {treeInstances.map((t, i) => (
+        <Tree key={i} x={t.x} z={t.z} model={t.model} scale={t.scale} rotationY={t.rotationY} />
       ))}
 
       {/* Heat zones - Frozen package rule + Lava City theme (radius already
@@ -189,17 +204,10 @@ function BoundaryWall({ wall }: { wall: { x: number; z: number; length: number; 
   );
 }
 
-function Tree({ x, z, scale }: { x: number; z: number; scale: number }) {
+function Tree({ x, z, model, scale, rotationY }: { x: number; z: number; model: (typeof TREE_MODELS)[number]; scale: number; rotationY: number }) {
   return (
-    <group position={[x, 0, z]} scale={scale}>
-      <mesh position={[0, 0.6, 0]} castShadow>
-        <cylinderGeometry args={[0.15, 0.2, 1.2, 6]} />
-        <meshStandardMaterial color="#4a3524" roughness={0.9} />
-      </mesh>
-      <mesh position={[0, 1.7, 0]} castShadow>
-        <sphereGeometry args={[0.9, 8, 8]} />
-        <meshStandardMaterial color="#2f6b2f" roughness={0.9} />
-      </mesh>
+    <group position={[x, 0, z]}>
+      <GLTFModel url={model.url} scale={scale} minY={model.minY} rotationY={rotationY} />
     </group>
   );
 }

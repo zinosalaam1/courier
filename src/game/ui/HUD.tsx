@@ -80,6 +80,12 @@ export function HUD() {
         </div>
       )}
 
+      {window.__tourArcadeCopActive && (
+        <div className="absolute left-1/2 top-16 -translate-x-1/2 animate-pulse border border-[#ff3b3b] bg-[#ff3b3b1a] px-4 py-1.5 text-center">
+          <span className="text-xs font-bold uppercase tracking-[0.3em] text-[#ff3b3b]">🚨 Wanted — Cop In Pursuit</span>
+        </div>
+      )}
+
       <div className="absolute bottom-5 left-5 flex flex-col gap-1.5">
         {toasts.map((t) => (
           <div key={t.id} className="max-w-[260px] border-l-2 border-[#c8f135] bg-[#07090cd9] px-2.5 py-1.5 text-[11px]">
@@ -134,6 +140,14 @@ function Minimap({ blackedOut, smoked }: { blackedOut: boolean; smoked: boolean 
             const [px, pz] = toMap(playerPos.x, playerPos.z);
             ctx.fillStyle = "#edf0f4";
             ctx.beginPath(); ctx.arc(px, pz, 3, 0, Math.PI * 2); ctx.fill();
+          }
+
+          // Pursuing cop, if active
+          const copPos = window.__tourArcadeCopPos;
+          if (copPos) {
+            const [cx, cz] = toMap(copPos.x, copPos.z);
+            ctx.fillStyle = "#ff3b3b";
+            ctx.beginPath(); ctx.arc(cx, cz, 3, 0, Math.PI * 2); ctx.fill();
           }
         }
       }

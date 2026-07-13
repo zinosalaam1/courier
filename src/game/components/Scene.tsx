@@ -5,6 +5,7 @@ import { City } from "./City";
 import { Player } from "./Player";
 import { HazardCars, type HazardCarsHandle } from "./HazardCars";
 import { GadgetEffects, type GadgetEffectsHandle } from "./GadgetEffects";
+import { CopCar, type CopHandle } from "./CopCar";
 import { EventsController } from "./EventsController";
 import { Rain } from "./Rain";
 import { Clouds } from "./Clouds";
@@ -101,6 +102,7 @@ export const Scene = memo(function Scene({ vehicle, theme }: SceneProps) {
   const { world, layout } = useMissionWorld(theme);
   const hazardCarsRef = useRef<HazardCarsHandle>(null);
   const gadgetEffectsRef = useRef<GadgetEffectsHandle>(null);
+  const copRef = useRef<CopHandle>(null);
 
   // IMPORTANT: this object must not be a fresh literal on every render. R3F's
   // <Canvas camera={...}> prop is watched for changes and re-applied whenever
@@ -140,18 +142,20 @@ export const Scene = memo(function Scene({ vehicle, theme }: SceneProps) {
         theme={theme}
         hazardCarsRef={hazardCarsRef}
         gadgetEffectsRef={gadgetEffectsRef}
+        copRef={copRef}
       />
     </Canvas>
   );
 });
 
 function SceneContents({
-  world, layout, vehicle, theme, hazardCarsRef, gadgetEffectsRef,
+  world, layout, vehicle, theme, hazardCarsRef, gadgetEffectsRef, copRef,
 }: SceneProps & {
   world: WorldRefs;
   layout: SoloCityLayout;
   hazardCarsRef: RefObject<HazardCarsHandle>;
   gadgetEffectsRef: RefObject<GadgetEffectsHandle>;
+  copRef: RefObject<CopHandle>;
 }) {
   const { scene } = useThree();
   const skyTexture = useMemo(() => makeSkyTexture(), []);
@@ -196,9 +200,10 @@ function SceneContents({
       <directionalLight position={[-60, 40, -80]} intensity={0.35} color="#c8f135" />
 
       <City world={world} theme={theme} layout={layout} />
-      <Player world={world} vehicle={vehicle} gadgetEffectsRef={gadgetEffectsRef} hazardCarsRef={hazardCarsRef} />
+      <Player world={world} vehicle={vehicle} gadgetEffectsRef={gadgetEffectsRef} hazardCarsRef={hazardCarsRef} copRef={copRef} />
       <HazardCars ref={hazardCarsRef} world={world} />
       <GadgetEffects ref={gadgetEffectsRef} world={world} />
+      <CopCar copRef={copRef} />
       <EventsController world={world} theme={theme} hazardCarsRef={hazardCarsRef} />
       <Rain active={Boolean(theme?.mods.rainVisual)} citySize={world.citySize} />
       <Clouds citySize={world.citySize} />
